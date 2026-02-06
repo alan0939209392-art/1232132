@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Tomica 收藏圖鑑</title>
+    
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#e60012">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3089/3089967.png">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Phosphor Icons 圖示庫 -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        :root { --tomica-red: #e60012; }
+        body { 
+            background-color: #f3f4f6; 
+            font-family: -apple-system, system-ui, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+        .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 20px); }
+        
+        /* 裁切視窗樣式 */
+        .crop-container {
+            position: relative;
+            width: 100%;
+            height: 300px;
+            background: #333;
+            overflow: hidden;
+            touch-action: none; /* 防止滑動時捲動頁面 */
+        }
+        
+        /* 虛線框，標示最終裁切範圍 */
+        .crop-frame {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 280px; /* 4:3 比例 */
+            height: 210px;
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6); /* 暗化周圍 */
+            pointer-events: none;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body class="pb-32">
+
+    <!-- 頂部標題 -->
+    <header class="bg-[#e60012] text-white px-6 pt-12 pb-6 sticky top-0 z-30 shadow-lg rounded-b-[2rem]">
+        <div class="flex justify-between items-center max-w-xl mx-auto">
+            <div>
+                <h1 class="text-2xl font-black italic tracking-tighter">TOMICA</h1>
+                <p class="text-[10px] opacity-80 tracking-widest">COLLECTION MANAGER</p>
+            </div>
+            <div class="text-right">
+                <div class="text-3xl font-bold leading-none" id="total-count">0</div>
+                <div class="text-[10px] opacity-80">總收藏數</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 車輛列表 -->
+    <main class="max-w-xl mx-auto p-4" id="car-list">
+        <!-- JS 動態生成 -->
+    </main>
+
+    <!-- 懸浮新增按鈕 (FAB) -->
+    <button onclick="openEditor()" class="fixed bottom-8 right-6 w-14 h-14 bg-black text-white rounded-full shadow-2xl flex items-center justify-center z-40 active:scale-90 transition-transform border border-gray-700">
+        <i class="ph ph-plus text-2xl"></i>
+    </button>
+
+    <!-- ===== 編輯/新增 模態視窗 (Modal) ===== -->
+    <div id="editor-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-end sm:items-center justify-center backdrop-blur-sm transition-opacity">
+        <div class="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl h-[90vh] sm:h-auto overflow-y-auto transform transition-transform duration-300 translate-y-full sm:translate-y-0" id="modal-content">
+            
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold text-gray-800" id="modal-title">新增車輛</h2>
+                <button onclick="closeEditor()" class="p-2 bg-gray-100 rounded-full text-gray-500 hover:bg-gray-200">
+                    <i class="ph ph-x text-lg"></i>
+                </button>
+            </div>
+
+            <!-- 表單區 -->
+            <div class="space-y-4">
+                <input type="hidden" id="edit-id"> <!-- 隱藏欄位：存 ID 用於判斷是新增還是修改 -->
+
+                <div class="flex space-x-3">
+                    <div class="w-1/3">
+                        <label class="block text-xs font-bold text-gray-500 mb-1">編號 (No.)</label>
+                        <input id="edit-no" type="number" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-center font-bold text-lg focus:ring-2 focus:ring-red-500 outline-none" placeholder="1">
+                    </div>
+                    <div class="w-2/3">
+                        <label class="block text-xs font-bold text-gray-500 mb-1">車輛名稱</label>
+                        <input id="edit-name" type="text" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 focus:ring-2 focus:ring-red-500 outline-none" placeholder="輸入名稱...">
+                    </div>
+                </div>
+
+                <!-- 圖片顯示區 -->
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">車輛照片</label>
+                    <div id="current-img-box" class="w-full aspect-[4/3] bg-gray-100 rounded-xl overflow-hidden border border-gray-200 relative group cursor-pointer" onclick="triggerUpload()">
+                        <img id="display-img" src="" class="w-full h-full object-cover hidden">
+                        <div id="placeholder-text" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
+                            <i class="ph ph-camera text-3xl mb-1"></i>
+                            <span class="text-xs">點擊拍照 / 上傳</span>
+                        </div>
+                    </div>
+                    <!-- 隱藏的檔案輸入 -->
+                    <input type="file" id="file-input" accept="image/*" class="hidden" onchange="startCropping(this)">
+                </div>
+
+                <!-- 刪除按鈕 (編輯模式才顯示) -->
+                <button id="btn-delete" onclick="deleteCurrentCar()" class="w-full py-3 text-red-500 font-bold rounded-xl border border-red-100 hidden hover:bg-red-50">
+                    刪除此車輛
+                </button>
+
+                <!-- 儲存按鈕 -->
+                <button onclick="saveCar()" class="w-full bg-[#e60012] text-white py-4 rounded-xl font-bold text-lg shadow-lg shadow-red-200 active:scale-95 transition-transform">
+                    確認儲存
+                </button>
+            </div>
+            <div class="h-10 sm:hidden"></div> <!-- 手機版底部墊高 -->
+        </div>
+    </div>
+
+    <!-- ===== 圖片裁切視窗 ===== -->
+    <div id="cropper-modal" class="fixed inset-0 bg-black z-[60] hidden flex flex-col">
+        <div class="p-4 flex justify-between items-center text-white bg-black/50 absolute top-0 w-full z-20 safe-top">
+            <button onclick="closeCropper()" class="px-4 py-2">取消</button>
+            <span class="font-bold">移動與縮放</span>
+            <button onclick="finishCrop()" class="px-4 py-2 text-red-500 font-bold">完成</button>
+        </div>
+
+        <div class="flex-1 flex items-center justify-center bg-black relative">
+            <canvas id="crop-canvas"></canvas> <!-- 實際操作的畫布 -->
+            <div class="crop-frame"></div> <!-- 視覺框框 -->
+        </div>
+
+        <div class="p-6 bg-black safe-bottom">
+            <div class="flex items-center space-x-4">
+                <i class="ph ph-minus text-white"></i>
+                <input type="range" id="zoom-slider" min="0.1" max="3" step="0.05" class="w-full accent-red-500" oninput="updateZoom(this.value)">
+                <i class="ph ph-plus text-white"></i>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 核心資料 ---
+        let cars = JSON.parse(localStorage.getItem('tomica_v3')) || [];
+        let currentEditingId = null;
+        let tempImgBase64 = null; // 暫存裁切好的圖片
+
+        // --- 裁切器變數 ---
+        let canvas, ctx;
+        let img = new Image();
+        let imgX = 0, imgY = 0, scale = 1, minScale = 0.1;
+        let isDragging = false;
+        let startX, startY;
+
+        // --- 初始化 ---
+        window.onload = () => {
+            renderList();
+            canvas = document.getElementById('crop-canvas');
+            ctx = canvas.getContext('2d');
+            
+            // 綁定觸控拖曳事件
+            canvas.addEventListener('touchstart', onTouchStart, {passive: false});
+            canvas.addEventListener('touchmove', onTouchMove, {passive: false});
+            canvas.addEventListener('touchend', onTouchEnd);
+            canvas.addEventListener('mousedown', onMouseDown);
+            canvas.addEventListener('mousemove', onMouseMove);
+            canvas.addEventListener('mouseup', onMouseUp);
+        };
+
+        // --- 1. 列表渲染 ---
+        function renderList() {
+            const list = document.getElementById('car-list');
+            list.innerHTML = '';
+            
+            // 排序：編號小到大
+            cars.sort((a, b) => a.no - b.no);
+            document.getElementById('total-count').innerText = cars.length;
+
+            if (cars.length === 0) {
+                list.innerHTML = `<div class="text-center text-gray-400 mt-20">點擊右下角 + 按鈕<br>開始建立你的圖鑑</div>`;
+                return;
+            }
+
+            const grid = document.createElement('div');
+            grid.className = 'grid grid-cols-2 gap-4';
+
+            cars.forEach(car => {
+                const item = document.createElement('div');
+                item.className = 'bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 active:scale-95 transition-transform';
+                item.onclick = () => openEditor(car.id); // 點擊進入編輯
+                
+                item.innerHTML = `
+                    <div class="relative aspect-[4/3] bg-gray-100">
+                        <img src="${car.img}" class="w-full h-full object-cover">
+                        <div class="absolute top-2 left-2 bg-black/70 text-white text-xs font-bold px-2 py-0.5 rounded">
+                            No.${car.no}
+                        </div>
+                    </div>
+                    <div class="p-3">
+                        <h3 class="font-bold text-gray-800 truncate">${car.name}</h3>
+                        <p class="text-[10px] text-gray-400 mt-1">點擊修改</p>
+                    </div>
+                `;
+                grid.appendChild(item);
+            });
+            list.appendChild(grid);
+        }
+
+        // --- 2. 編輯器 Modal ---
+        function openEditor(id = null) {
+            const modal = document.getElementById('editor-modal');
+            const content = document.getElementById('modal-content');
+            
+            // 重置表單
+            tempImgBase64 = null;
+            document.getElementById('edit-no').value = '';
+            document.getElementById('edit-name').value = '';
+            document.getElementById('display-img').classList.add('hidden');
+            document.getElementById('placeholder-text').classList.remove('hidden');
+            
+            if (id) {
+                // 修改模式
+                const car = cars.find(c => c.id === id);
+                currentEditingId = id;
+                document.getElementById('edit-id').value = id;
+                document.getElementById('modal-title').innerText = '編輯車輛資料';
+                document.getElementById('edit-no').value = car.no;
+                document.getElementById('edit-name').value = car.name;
+                document.getElementById('btn-delete').classList.remove('hidden');
+                
+                // 顯示現有圖片
+                document.getElementById('display-img').src = car.img;
+                document.getElementById('display-img').classList.remove('hidden');
+                document.getElementById('placeholder-text').classList.add('hidden');
+                tempImgBase64 = car.img; // 保留原圖
+            } else {
+                // 新增模式
+                currentEditingId = null;
+                document.getElementById('modal-title').innerText = '新增收藏';
+                document.getElementById('btn-delete').classList.add('hidden');
+            }
+
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                content.classList.remove('translate-y-full');
+            }, 10);
+        }
+
+        function closeEditor() {
+            const modal = document.getElementById('editor-modal');
+            const content = document.getElementById('modal-content');
+            content.classList.add('translate-y-full');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        // --- 3. 圖片上傳與裁切邏輯 (核心) ---
+        function triggerUpload() {
+            document.getElementById('file-input').click();
+        }
+
+        function startCropping(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    img.src = e.target.result;
+                    img.onload = () => {
+                        // 開啟裁切視窗
+                        document.getElementById('cropper-modal').classList.remove('hidden');
+                        
+                        // 設定 Canvas 大小為全螢幕
+                        canvas.width = window.innerWidth;
+                        canvas.height = window.innerHeight - 150; // 扣除上下工具列
+                        
+                        // 初始化圖片位置 (置中)
+                        const ratio = Math.min(canvas.width / img.width, canvas.height / img.height);
+                        scale = ratio;
+                        minScale = ratio * 0.5;
+                        imgX = (canvas.width - img.width * scale) / 2;
+                        imgY = (canvas.height - img.height * scale) / 2;
+                        
+                        // 更新 Slider
+                        document.getElementById('zoom-slider').value = scale;
+                        document.getElementById('zoom-slider').min = minScale;
+                        document.getElementById('zoom-slider').max = ratio * 3;
+                        
+                        drawImage();
+                    };
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+            input.value = ''; // 重置 input 以便重複選取
+        }
+
+        function drawImage() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, imgX, imgY, img.width * scale, img.height * scale);
+        }
+
+        // 觸控/滑鼠拖曳邏輯
+        function onTouchStart(e) { startDrag(e.touches[0].clientX, e.touches[0].clientY); }
+        function onMouseDown(e) { startDrag(e.clientX, e.clientY); }
+        
+        function startDrag(x, y) {
+            isDragging = true;
+            startX = x - imgX;
+            startY = y - imgY;
+        }
+
+        function onTouchMove(e) { 
+            e.preventDefault(); // 防止手機下拉重新整理
+            if (isDragging) moveDrag(e.touches[0].clientX, e.touches[0].clientY); 
+        }
+        function onMouseMove(e) { if (isDragging) moveDrag(e.clientX, e.clientY); }
+
+        function moveDrag(x, y) {
+            imgX = x - startX;
+            imgY = y - startY;
+            drawImage();
+        }
+
+        function onTouchEnd() { isDragging = false; }
+        function onMouseUp() { isDragging = false; }
+
+        function updateZoom(val) {
+            // 以中心點縮放 (簡化版：重置位置到中心)
+            // 如果要做精確的中心縮放比較複雜，這裡用簡單的重繪
+            const oldScale = scale;
+            scale = parseFloat(val);
+            // 嘗試保持中心 (簡單位移補償)
+            imgX -= (img.width * scale - img.width * oldScale) / 2;
+            imgY -= (img.height * scale - img.height * oldScale) / 2;
+            drawImage();
+        }
+
+        function closeCropper() {
+            document.getElementById('cropper-modal').classList.add('hidden');
+        }
+
+        function finishCrop() {
+            // 真正執行裁切
+            // 1. 計算裁切框在 Canvas 上的位置
+            const frameW = 280;
+            const frameH = 210;
+            const frameX = (canvas.width - frameW) / 2;
+            const frameY = (canvas.height - frameH) / 2;
+
+            // 2. 建立一個新的 Canvas 來輸出結果
+            const outputCanvas = document.createElement('canvas');
+            outputCanvas.width = 800;  // 最終存檔解析度 (寬)
+            outputCanvas.height = 600; // 最終存檔解析度 (高) 4:3
+            const outCtx = outputCanvas.getContext('2d');
+
+            // 3. 計算來源圖片在 crop-frame 裡的相對位置與比例映射
+            // 來源：Canvas 上的 (frameX, frameY) 寬度 frameW, 高度 frameH
+            // 但圖片可能被縮放了，所以我們直接畫整個 Canvas 內容的一塊
+            
+            // 更好的解法：直接把目前的 Canvas 內容截圖下來
+            outCtx.drawImage(
+                canvas, 
+                frameX, frameY, frameW, frameH, // 來源座標 (就是那個框框)
+                0, 0, outputCanvas.width, outputCanvas.height // 目標 (填滿輸出)
+            );
+
+            // 4. 轉為 Base64
+            tempImgBase64 = outputCanvas.toDataURL('image/jpeg', 0.85);
+
+            // 5. 更新編輯器預覽
+            document.getElementById('display-img').src = tempImgBase64;
+            document.getElementById('display-img').classList.remove('hidden');
+            document.getElementById('placeholder-text').classList.add('hidden');
+
+            closeCropper();
+        }
+
+        // --- 4. CRUD 儲存與刪除 ---
+        function saveCar() {
+            const no = parseInt(document.getElementById('edit-no').value);
+            const name = document.getElementById('edit-name').value;
+
+            if (!no || !name) {
+                alert('請填寫編號與名稱');
+                return;
+            }
+
+            // 如果是新增，必須有圖片 (或你要允許預設圖)
+            if (!tempImgBase64) {
+                if(!confirm("尚未設定圖片，要使用預設圖嗎？")) return;
+                tempImgBase64 = "https://placehold.co/800x600/e6e6e6/888?text=No+Photo";
+            }
+
+            if (currentEditingId) {
+                // 修改現有
+                const index = cars.findIndex(c => c.id === currentEditingId);
+                if (index !== -1) {
+                    cars[index].no = no;
+                    cars[index].name = name;
+                    cars[index].img = tempImgBase64;
+                }
+            } else {
+                // 新增 (直接增加，不需勾選，預設已擁有)
+                const newCar = {
+                    id: Date.now(),
+                    no: no,
+                    name: name,
+                    img: tempImgBase64
+                };
+                cars.push(newCar);
+            }
+
+            localStorage.setItem('tomica_v3', JSON.stringify(cars));
+            closeEditor();
+            renderList();
+        }
+
+        function deleteCurrentCar() {
+            if (confirm("確定要刪除這台車的資料嗎？(無法復原)")) {
+                cars = cars.filter(c => c.id !== currentEditingId);
+                localStorage.setItem('tomica_v3', JSON.stringify(cars));
+                closeEditor();
+                renderList();
+            }
+        }
+
+    </script>
+</body>
+</html>
+
+
